@@ -1,0 +1,11 @@
+venv/
+.venv/
+.env
+
+audio_outputs/
+temp/
+faiss_indexes/
+sessions/
+
+__pycache__/
+*.pyc

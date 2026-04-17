@@ -1,0 +1,1394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>VidMind AI — Talk to Any Video with AI</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+
+<style>
+/* ─── Reset & Variables ──────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:       #080c10;
+  --surface:  #0d1117;
+  --panel:    #111820;
+  --border:   #1e2d3d;
+  --border2:  #253547;
+  --text:     #c9d1d9;
+  --muted:    #5c7080;
+  --accent:   #00d4ff;
+  --accent2:  #7c3aed;
+  --accent3:  #10b981;
+  --danger:   #ef4444;
+  --warn:     #f59e0b;
+  --glow:     rgba(0, 212, 255, 0.15);
+  --glow2:    rgba(124, 58, 237, 0.12);
+  --radius:   12px;
+  --radius-sm: 8px;
+  --font-head: 'Syne', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'DM Mono', monospace;
+}
+
+/* Light theme overrides (applied when <body> has class 'light') */
+body.light {
+  --bg:       #f7fafc;
+  --surface:  #ffffff;
+  --panel:    #ffffff;
+  --border:   #e6eef8;
+  --border2:  #dbeaf7;
+  --text:     #0b1220;
+  --muted:    #5b6b78;
+  --accent:   #0966b2;
+  --accent2:  #6b21a8;
+  --accent3:  #0b8457;
+  --danger:   #b91c1c;
+  --warn:     #b45309;
+  --glow:     rgba(9,102,178,0.08);
+  --glow2:    rgba(107,33,168,0.06);
+}
+
+/* Smooth transitions for theme switching */
+body, .panel, .msg-text, .indexed-item, .video-card, .btn, .status-pill {
+  transition: background-color 0.35s ease, color 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+html { font-size: 16px; scroll-behavior: smooth; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-weight: 400;
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* ─── Noise Texture Overlay ─────────────────────────────────────────────── */
+body::before {
+  content: '';
+  position: fixed; inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+  pointer-events: none; z-index: 0;
+  opacity: 0.4;
+}
+
+/* ─── Grid Lines ─────────────────────────────────────────────────────────── */
+body::after {
+  content: '';
+  position: fixed; inset: 0;
+  background-image:
+    linear-gradient(rgba(0,212,255,0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,212,255,0.025) 1px, transparent 1px);
+  background-size: 40px 40px;
+  pointer-events: none; z-index: 0;
+}
+
+/* ─── Layout ─────────────────────────────────────────────────────────────── */
+.app {
+  position: relative; z-index: 1;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 20px 80px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────── */
+header {
+  padding: 56px 0 18px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo-block {}
+
+.logo {
+  font-family: var(--font-head);
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent2) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  line-height: 1;
+}
+
+.logo span {
+  font-weight: 400;
+  background: linear-gradient(135deg, #7dd3fc, var(--accent2));
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+  .tagline {
+  font-size: 0.98rem;
+  color: rgba(201,209,217,0.95);
+  letter-spacing: 0.04em;
+  font-family: var(--font-body);
+  margin-top: 6px;
+  opacity: 0.95;
+  font-weight: 600;
+}
+
+/* Subtle header improvements for LinkedIn showcase */
+.logo { letter-spacing: -0.02em; }
+.logo span { font-weight: 700; }
+
+.status-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 100px;
+  padding: 6px 14px;
+  font-size: 0.75rem;
+  font-family: var(--font-mono);
+  color: var(--muted);
+}
+
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--muted);
+  transition: background 0.3s, box-shadow 0.3s;
+}
+
+.status-dot.online {
+  background: var(--accent3);
+  box-shadow: 0 0 8px var(--accent3);
+  animation: pulse-dot 2s infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ─── Panels ─────────────────────────────────────────────────────────────── */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+.panel::before {
+  content: '';
+  position: absolute; top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  opacity: 0.3;
+}
+
+.panel-title {
+  font-family: var(--font-head);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-title .icon {
+  width: 20px; height: 20px;
+  background: var(--panel);
+  border-radius: 6px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 10px;
+}
+
+/* ─── Form Inputs ─────────────────────────────────────────────────────────── */
+.input-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.input-label {
+  font-size: 0.78rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+}
+
+input[type="text"], input[type="url"], textarea {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  padding: 12px 16px;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+  resize: none;
+}
+
+input[type="text"]:focus, input[type="url"]:focus, textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--glow);
+}
+
+input::placeholder, textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.6;
+}
+
+/* ─── Buttons ─────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 0.875rem;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, var(--accent) 0%, #0099cc 100%);
+  color: #000;
+  box-shadow: 0 0 20px rgba(0,212,255,0.25);
+}
+
+.btn { transition: transform 0.12s ease, box-shadow 0.18s ease, opacity 0.12s ease; }
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 20px 40px rgba(0,212,255,0.22), 0 6px 18px rgba(0,0,0,0.45);
+  transform: translateY(-2px) scale(1.025);
+}
+.btn-primary:active:not(:disabled) { transform: translateY(0) scale(0.995); }
+
+.btn-secondary {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  padding: 8px 12px;
+  font-size: 0.8rem;
+}
+
+.btn-ghost:hover { color: var(--text); }
+
+/* Theme toggle styling */
+#theme-toggle { display:inline-flex; align-items:center; gap:8px; padding:8px 10px; border-radius:10px; }
+#theme-toggle span { color: var(--muted); }
+#theme-toggle[aria-pressed="true"] { box-shadow: 0 8px 18px rgba(0,0,0,0.12); }
+
+.btn-full { width: 100%; }
+
+.spinner {
+  display: inline-block;
+  width: 14px; height: 14px;
+  border: 2px solid rgba(0,0,0,0.3);
+  border-top-color: #000;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ─── Video Input Section ────────────────────────────────────────────────── */
+.video-form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.url-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.url-row .input-group { flex: 1; }
+
+/* ─── Video Status Card ──────────────────────────────────────────────────── */
+.video-card {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  transition: border-color 0.2s;
+}
+
+.video-card.active { border-color: var(--accent3); }
+
+.video-thumb {
+  width: 64px; height: 48px;
+  border-radius: 6px;
+  background: var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 20px;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+.video-thumb img { width: 100%; height: 100%; object-fit: cover; }
+
+.video-info { flex: 1; min-width: 0; }
+
+.video-id {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--accent);
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.video-meta {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.68rem;
+  font-family: var(--font-mono);
+  letter-spacing: 0.05em;
+  font-weight: 500;
+}
+
+.badge-success { background: rgba(16,185,129,0.15); color: var(--accent3); border: 1px solid rgba(16,185,129,0.3); }
+.badge-warn    { background: rgba(245,158,11,0.15);  color: var(--warn);    border: 1px solid rgba(245,158,11,0.3); }
+.badge-info    { background: rgba(0,212,255,0.1);    color: var(--accent);  border: 1px solid rgba(0,212,255,0.2); }
+.badge-error   { background: rgba(239,68,68,0.15);   color: var(--danger);  border: 1px solid rgba(239,68,68,0.3); }
+
+/* ─── Progress Bar ───────────────────────────────────────────────────────── */
+.progress-wrap {
+  display: none;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.progress-wrap.visible { display: flex; }
+
+.progress-label {
+  font-size: 0.75rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.progress-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  border-radius: 2px;
+  animation: progress-indeterminate 1.5s ease-in-out infinite;
+}
+
+@keyframes progress-indeterminate {
+  0%   { transform: translateX(-100%); width: 60%; }
+  50%  { transform: translateX(50%);  width: 60%; }
+  100% { transform: translateX(200%); width: 60%; }
+}
+
+/* ─── Chat Interface ─────────────────────────────────────────────────────── */
+.chat-area {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* AI orb for empty chat */
+.ai-orb { width: 120px; height: 120px; margin: 8px auto 12px; position: relative; }
+.ai-orb .orb-core {
+  width: 36px; height: 36px; border-radius: 50%; background: radial-gradient(circle at 30% 30%, var(--accent), var(--accent2));
+  position: absolute; left:50%; top:50%; transform: translate(-50%,-50%); box-shadow: 0 8px 30px rgba(0,212,255,0.18), 0 0 60px rgba(124,58,237,0.08);
+  animation: orb-pulse 3s ease-in-out infinite;
+}
+.ai-orb .orb-halo {
+  position:absolute; left:50%; top:50%; transform: translate(-50%,-50%); width:100%; height:100%; border-radius:50%;
+  background: radial-gradient(circle at 50% 40%, rgba(0,212,255,0.08), rgba(124,58,237,0.03)); filter: blur(14px);
+  animation: orb-rotate 6s linear infinite;
+}
+@keyframes orb-pulse { 0% { transform: translate(-50%,-50%) scale(0.92); } 50% { transform: translate(-50%,-50%) scale(1.08); } 100% { transform: translate(-50%,-50%) scale(0.92); } }
+@keyframes orb-rotate { 0% { transform: translate(-50%,-50%) rotate(0deg); } 100% { transform: translate(-50%,-50%) rotate(360deg); } }
+
+/* Typing/thinking dots */
+.msg-text.typing { background: transparent; border: none; padding: 6px 0; box-shadow: none; }
+.msg-text.typing .dotdot { display:inline-block; margin:0 3px; color: var(--muted); animation: blink 1.2s infinite; font-size: 18px; }
+.msg-text.typing .dotdot:nth-child(2) { animation-delay: 0.15s; }
+.msg-text.typing .dotdot:nth-child(3) { animation-delay: 0.3s; }
+@keyframes blink { 0% { opacity: 0.15; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-4px); } 100% { opacity: 0.15; transform: translateY(0); } }
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-height: 100px;
+}
+
+.message {
+  display: flex;
+  gap: 12px;
+  animation: msg-in 0.3s ease-out;
+}
+
+@keyframes msg-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.msg-avatar {
+  width: 34px; height: 34px;
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.msg-user .msg-avatar   { background: rgba(0,212,255,0.15); border: 1px solid rgba(0,212,255,0.25); }
+.msg-system .msg-avatar { background: rgba(124,58,237,0.15); border: 1px solid rgba(124,58,237,0.25); }
+
+.msg-body { flex: 1; min-width: 0; }
+
+.msg-meta {
+  font-size: 0.7rem;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.msg-text {
+  font-size: 0.95rem;
+  line-height: 1.5;
+  color: var(--text);
+  /* Allow long text to wrap naturally and preserve line breaks */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  word-wrap: break-word;
+  word-break: break-word;
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+  border: 1px solid rgba(255,255,255,0.03);
+  padding: 12px 14px;
+  border-radius: 12px;
+  max-height: none;
+  box-shadow: 0 6px 18px rgba(2,6,23,0.5);
+}
+
+/* Differentiate user vs system bubbles */
+.msg-user { flex-direction: row-reverse; }
+.msg-user .msg-text { background: linear-gradient(180deg, rgba(0,212,255,0.06), rgba(0,212,255,0.03)); border-color: rgba(0,212,255,0.16); color: #001219; box-shadow: 0 6px 18px rgba(0,212,255,0.04); }
+.msg-system .msg-text { background: linear-gradient(180deg, rgba(34,30,46,0.65), rgba(17,24,33,0.6)); border-color: rgba(124,58,237,0.08); }
+.msg-user .msg-avatar { margin-top: 2px; margin-left: 8px; }
+.msg-system .msg-avatar { margin-right: 8px; }
+
+/* Gradient border highlight for bubbles */
+.msg-text::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: 14px;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(0,212,255,0.06), rgba(124,58,237,0.04));
+  filter: blur(8px);
+  opacity: 0.45;
+  z-index: -1;
+}
+
+/* Ensure wrapper positions for pseudo-element */
+.message .msg-body { position: relative; }
+
+.msg-text p { margin-bottom: 8px; }
+.msg-text p:last-child { margin-bottom: 0; }
+
+/* ─── Audio Player ───────────────────────────────────────────────────────── */
+.audio-player {
+  margin-top: 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.audio-player audio {
+  flex: 1;
+  height: 32px;
+  filter: invert(1) hue-rotate(180deg) brightness(0.9);
+}
+
+.audio-label {
+  font-size: 0.7rem;
+  font-family: var(--font-mono);
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+/* ─── Retrieved Chunks ───────────────────────────────────────────────────── */
+.chunks-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  margin-top: 10px;
+  transition: color 0.2s;
+}
+
+.chunks-toggle:hover { color: var(--accent); }
+
+.chunks-arrow { transition: transform 0.2s; font-size: 0.6rem; }
+.chunks-toggle.open .chunks-arrow { transform: rotate(90deg); }
+
+.chunks-panel {
+  display: none;
+  margin-top: 10px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.chunks-panel.open { display: flex; }
+
+.chunk-item {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+}
+
+.chunk-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.chunk-id {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--accent2);
+}
+
+.chunk-score {
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--accent3);
+}
+
+.chunk-text {
+  font-size: 0.78rem;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.chunk-time {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--border2);
+  margin-top: 4px;
+}
+
+/* ─── Question Input ─────────────────────────────────────────────────────── */
+.question-row {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+
+.question-row textarea {
+  flex: 1;
+  min-height: 52px;
+  max-height: 120px;
+  padding-top: 14px;
+  padding-bottom: 14px;
+  line-height: 1.4;
+}
+
+/* ─── Indexed Videos ─────────────────────────────────────────────────────── */
+.indexed-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.indexed-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: linear-gradient(180deg, rgba(255,255,255,0.01), rgba(255,255,255,0.005));
+  border: 1px solid rgba(255,255,255,0.03);
+  border-radius: 10px;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.indexed-item:hover { border-color: var(--accent); background: rgba(0,212,255,0.02); }
+.indexed-item.selected { border-color: var(--accent); background: rgba(0,212,255,0.04); }
+
+.indexed-id {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--accent);
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ─── Empty State ────────────────────────────────────────────────────────── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.empty-icon { font-size: 2.5rem; opacity: 0.4; }
+.empty-text { font-size: 0.85rem; font-family: var(--font-mono); }
+
+/* ─── Toast Notifications ────────────────────────────────────────────────── */
+#toast-container {
+  position: fixed;
+  bottom: 24px; right: 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  z-index: 1000;
+}
+
+.toast {
+  background: var(--panel);
+  border: 1px solid var(--border2);
+  border-radius: var(--radius-sm);
+  padding: 12px 16px;
+  font-size: 0.82rem;
+  font-family: var(--font-mono);
+  max-width: 340px;
+  animation: toast-in 0.3s ease-out;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.toast.success { border-color: rgba(16,185,129,0.5); }
+.toast.error   { border-color: rgba(239,68,68,0.5);  }
+.toast.info    { border-color: rgba(0,212,255,0.3);  }
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--surface); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+
+/* ─── Two-Column Layout ──────────────────────────────────────────────────── */
+  .main-grid {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+  gap: 24px;
+  align-items: start;
+}
+
+  /* Make chat column panels larger for readability and allow messages to scroll */
+  .main-col .panel {
+    min-height: 520px !important;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Messages area should grow and scroll vertically */
+  .main-col .panel .messages {
+    flex: 1 1 auto;
+    overflow-y: auto;
+    padding-right: 8px; /* give room for scrollbar */
+  }
+
+.sidebar { display: flex; flex-direction: column; gap: 16px; }
+.main-col { display: flex; flex-direction: column; gap: 16px; }
+
+@media (max-width: 720px) {
+  .main-grid { grid-template-columns: 1fr; }
+  .url-row { flex-direction: column; }
+  .url-row .btn { width: 100%; }
+}
+
+/* ─── Separator ──────────────────────────────────────────────────────────── */
+.sep {
+  height: 1px;
+  background: var(--border);
+  border: none;
+}
+
+/* ─── API Key Notice ─────────────────────────────────────────────────────── */
+.api-notice {
+  background: rgba(245,158,11,0.08);
+  border: 1px solid rgba(245,158,11,0.2);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 0.78rem;
+  color: var(--warn);
+  font-family: var(--font-mono);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+</style>
+</head>
+
+<body>
+<div class="app">
+
+  <!-- ─── Header ─────────────────────────────────────────────────────────── -->
+  <header>
+    <div class="logo-block">
+      <div class="logo">VidMind <span>AI</span></div>
+      <div class="tagline">Talk to Any Video with AI</div>
+    </div>
+    <div style="display:flex;align-items:center;gap:12px">
+      <button id="theme-toggle" class="btn btn-ghost" aria-pressed="false" title="Toggle light / dark theme">🌙 <span id="theme-toggle-label" style="margin-left:8px;font-family:var(--font-mono);font-size:0.82rem">Dark</span></button>
+      <div class="status-pill">
+        <div class="status-dot" id="status-dot"></div>
+        <span id="status-text">connecting...</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ─── Process Video ───────────────────────────────────────────────────── -->
+  <div class="panel">
+    <div class="panel-title"><span class="icon">⬇</span> Process Video</div>
+
+    <div class="video-form">
+      <div class="url-row">
+        <div class="input-group">
+          <label class="input-label">Video URL (YouTube, Vimeo, or direct)</label>
+          <input type="url" id="video-url" placeholder="https://www.youtube.com/watch?v=..." />
+        </div>
+        <button class="btn btn-primary" id="process-btn" onclick="processVideo()">
+          <span id="process-btn-text">Process</span>
+        </button>
+      </div>
+
+      <div class="progress-wrap" id="progress-wrap">
+        <div class="progress-label">
+          <span id="progress-step-dot">⠋</span>
+          <span id="progress-label">Initializing...</span>
+        </div>
+        <div class="progress-bar"><div class="progress-fill"></div></div>
+      </div>
+
+      <div id="video-card-wrap" style="display:none">
+        <div class="video-card" id="video-card">
+          <div class="video-thumb">📹</div>
+          <div class="video-info">
+            <div class="video-id" id="vc-id">—</div>
+            <div class="video-meta" id="vc-meta">—</div>
+          </div>
+          <span class="badge badge-success" id="vc-badge">indexed</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ─── Main Grid ───────────────────────────────────────────────────────── -->
+  <div class="main-grid">
+
+    <!-- ─── Sidebar ─────────────────────────────────────────────────────── -->
+    <div class="sidebar">
+      <div class="panel">
+        <div class="panel-title"><span class="icon">📁</span> Recent Videos</div>
+        <div id="indexed-list" class="indexed-list">
+          <div class="empty-state">
+            <div class="empty-icon">🎬</div>
+            <div class="empty-text">No videos indexed yet</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-title"><span class="icon">⚙</span> Settings</div>
+        <div class="input-group">
+          <label class="input-label">Top-K Chunks (1-10)</label>
+          <input type="text" id="top-k" value="5" style="width:80px" />
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── Chat Column ──────────────────────────────────────────────────── -->
+    <div class="main-col">
+      <div class="panel" style="min-height:380px">
+        <div class="panel-title"><span class="icon">💬</span> Chat</div>
+
+        <div class="messages" id="messages">
+          <div class="empty-state" id="chat-empty">
+            <div class="ai-orb" aria-hidden="true">
+              <div class="orb-core"></div>
+              <div class="orb-halo"></div>
+            </div>
+            <div class="empty-icon" style="display:none">🤖</div>
+            <div class="empty-text">No conversation yet — process a video or select one to start chatting.</div>
+          </div>
+        </div>
+
+        <hr class="sep" style="margin:20px 0 16px">
+
+        <div class="question-row">
+          <textarea
+            id="question-input"
+            rows="2"
+            placeholder="What is this video about? What did they say about...?"
+            onkeydown="handleQuestionKey(event)"
+          ></textarea>
+          <div style="display:flex;flex-direction:column;gap:8px">
+            <div style="display:flex;gap:8px;align-items:center">
+              <button class="btn btn-primary" id="ask-btn" onclick="askQuestion()" disabled>
+                <span id="ask-btn-text">Ask</span>
+              </button>
+              <div id="suggest-chips" style="display:flex;gap:8px">
+                <button class="btn btn-ghost" onclick="useSuggestion('Summarize the video in 2-3 sentences')">Summarize</button>
+                <button class="btn btn-ghost" onclick="useSuggestion('List the key points from the video')">Key Points</button>
+                <button class="btn btn-ghost" onclick="useSuggestion('Create a 5-question quiz about the video')">Quiz</button>
+                <button class="btn btn-ghost" onclick="useSuggestion('Explain in Hindi')">Hindi</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div id="ask-progress" class="progress-wrap" style="margin-top:12px">
+          <div class="progress-label">
+            <span>⠋</span>
+            <span id="ask-progress-label">Retrieving context...</span>
+          </div>
+          <div class="progress-bar"><div class="progress-fill" style="background:linear-gradient(90deg,var(--accent2),var(--accent))"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ─── Toast Container ─────────────────────────────────────────────────── -->
+<div id="toast-container"></div>
+
+<script>
+/* ─── State ────────────────────────────────────────────────────────────── */
+const API = window.location.origin;
+let currentVideoId = null;
+const THEME_KEY = 'vidmind_theme';
+let isAsking = false;
+
+/* ─── Init ─────────────────────────────────────────────────────────────── */
+document.addEventListener('DOMContentLoaded', async () => {
+  await checkHealth();
+  await loadIndexedVideos();
+  // Restore previously selected video if present
+  try {
+    const sel = localStorage.getItem('vidmind_selected_video');
+    if (sel) {
+      // small delay to ensure list rendered
+      setTimeout(() => {
+        try { selectVideo(sel); } catch (e) { /* ignore */ }
+      }, 100);
+    }
+  } catch (e) {}
+  autoResizeTextarea(document.getElementById('question-input'));
+});
+
+/* ─── Health Check ─────────────────────────────────────────────────────── */
+async function checkHealth() {
+  try {
+    const r = await fetch(`${API}/health`, { signal: AbortSignal.timeout(5000) });
+    const ok = r.ok;
+    document.getElementById('status-dot').className = 'status-dot ' + (ok ? 'online' : '');
+    document.getElementById('status-text').textContent = ok ? 'api online' : 'api error';
+  } catch {
+    document.getElementById('status-text').textContent = 'unreachable';
+  }
+}
+
+/* ─── Load Indexed Videos ──────────────────────────────────────────────── */
+async function loadIndexedVideos() {
+  try {
+    const r = await fetch(`${API}/status`);
+    if (!r.ok) throw new Error('Status fetch failed');
+    const data = await r.json();
+    const vids = data.indexed_videos || [];
+    renderIndexedList(vids);
+    try { localStorage.setItem('vidmind_indexed_videos', JSON.stringify(vids)); } catch (e) {}
+    return;
+  } catch (e) {
+    console.warn('Could not load indexed videos from API:', e);
+    // Fallback: try localStorage
+    try {
+      const stored = localStorage.getItem('vidmind_indexed_videos');
+      if (stored) {
+        const vids = JSON.parse(stored || '[]');
+        renderIndexedList(vids || []);
+        return;
+      }
+    } catch (ee) { console.warn('Failed to load indexed videos from localStorage', ee); }
+  }
+}
+
+function renderIndexedList(videos) {
+  const el = document.getElementById('indexed-list');
+  if (!videos.length) {
+    el.innerHTML = `<div class="empty-state">
+      <div class="empty-icon">🎬</div>
+      <div class="empty-text">No videos indexed yet</div>
+    </div>`;
+    return;
+  }
+    function prettyTitle(id) {
+      try {
+        let s = String(id || '');
+        s = s.replace(/^yt[_-]?/i, '');
+        s = s.replace(/[_-]/g, ' ');
+        s = s.replace(/\b([a-z])/g, (m) => m.toUpperCase());
+        return s.length > 48 ? s.substring(0, 48) + '…' : s;
+      } catch (e) { return id; }
+      }
+
+  el.innerHTML = videos.map(vid => `
+    <div class="indexed-item ${vid === currentVideoId ? 'selected' : ''}"
+         onclick="selectVideo('${vid}')">
+      <div class="indexed-id">${prettyTitle(vid)}</div>
+      <span class="badge badge-info">ready</span>
+    </div>
+  `).join('');
+}
+
+function selectVideo(videoId) {
+  currentVideoId = videoId;
+  document.getElementById('vc-id').textContent = videoId;
+  document.getElementById('vc-meta').textContent = 'Selected from index';
+  document.getElementById('video-card-wrap').style.display = 'block';
+  document.getElementById('ask-btn').disabled = false;
+  document.getElementById('vc-badge').textContent = 'selected';
+  try { localStorage.setItem('vidmind_selected_video', videoId); } catch (e) {}
+  loadIndexedVideos(); // Refresh to show selection
+  toast('Video selected: ' + videoId, 'info');
+}
+
+/* ─── Theme (Light / Dark) ───────────────────────────────────────────────── */
+function applyTheme(theme) {
+  if (theme === 'light') {
+    document.body.classList.add('light');
+    document.getElementById('theme-toggle').setAttribute('aria-pressed', 'true');
+    document.getElementById('theme-toggle-label').textContent = 'Light';
+  } else {
+    document.body.classList.remove('light');
+    document.getElementById('theme-toggle').setAttribute('aria-pressed', 'false');
+    document.getElementById('theme-toggle-label').textContent = 'Dark';
+  }
+  try { localStorage.setItem(THEME_KEY, theme); } catch (e) {}
+}
+
+function initTheme() {
+  try {
+    const stored = localStorage.getItem(THEME_KEY);
+    if (stored === 'light' || stored === 'dark') {
+      applyTheme(stored);
+      return;
+    }
+  } catch (e) {}
+
+  // Default: dark, but respect system preference if explicitly light
+  const prefersLight = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches;
+  applyTheme(prefersLight ? 'light' : 'dark');
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  // initialize theme toggle after DOM ready
+  initTheme();
+  const tbtn = document.getElementById('theme-toggle');
+  if (tbtn) {
+    tbtn.addEventListener('click', () => {
+      const isLight = document.body.classList.contains('light');
+      applyTheme(isLight ? 'dark' : 'light');
+    });
+  }
+});
+
+/* ─── Process Video ────────────────────────────────────────────────────── */
+async function processVideo() {
+  const url = document.getElementById('video-url').value.trim();
+  if (!url) { toast('Please enter a video URL', 'error'); return; }
+
+  const btn = document.getElementById('process-btn');
+  const btnText = document.getElementById('process-btn-text');
+  const progressWrap = document.getElementById('progress-wrap');
+  const progressLabel = document.getElementById('progress-label');
+
+  btn.disabled = true;
+  btnText.innerHTML = '<span class="spinner"></span> Processing';
+  progressWrap.classList.add('visible');
+
+  const steps = [
+    'Downloading audio track...',
+    'Transcribing with Whisper...',
+    'Chunking transcript...',
+    'Generating embeddings...',
+    'Building FAISS index...',
+    'Finalizing...'
+  ];
+
+  let stepIdx = 0;
+  const stepInterval = setInterval(() => {
+    if (stepIdx < steps.length - 1) {
+      progressLabel.textContent = steps[stepIdx++];
+    }
+  }, 8000);
+
+  progressLabel.textContent = steps[0];
+
+  try {
+    const r = await fetch(`${API}/process_video`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video_url: url, force_reprocess: false })
+    });
+
+    clearInterval(stepInterval);
+
+    if (!r.ok) {
+      const err = await r.json();
+      throw new Error(err.detail || `HTTP ${r.status}`);
+    }
+
+    const data = await r.json();
+    currentVideoId = data.video_id;
+
+    // Update UI
+    document.getElementById('vc-id').textContent = getPrettyTitle(data.video_id);
+    document.getElementById('vc-meta').textContent =
+      `${data.num_chunks} chunks · ${(data.transcript_length / 1000).toFixed(1)}k chars`;
+    document.getElementById('vc-badge').textContent =
+      data.status === 'cached' ? 'cached' : 'indexed';
+    document.getElementById('video-card-wrap').style.display = 'block';
+    document.getElementById('video-card').classList.add('active');
+    document.getElementById('ask-btn').disabled = false;
+
+    progressLabel.textContent = '✓ Done!';
+    setTimeout(() => progressWrap.classList.remove('visible'), 1500);
+
+    toast(data.status === 'cached' ? 'Video already indexed!' : `Indexed ${data.num_chunks} chunks`, 'success');
+    await loadIndexedVideos();
+
+  } catch (e) {
+    clearInterval(stepInterval);
+    progressWrap.classList.remove('visible');
+    toast('Error: ' + e.message, 'error');
+    console.error(e);
+  } finally {
+    btn.disabled = false;
+    btnText.textContent = 'Process';
+  }
+}
+
+/* ─── Ask Question ─────────────────────────────────────────────────────── */
+async function askQuestion() {
+  if (isAsking) return; // prevent concurrent asks
+  const question = document.getElementById('question-input').value.trim();
+  if (!question) { toast('Please enter a question', 'error'); return; }
+  if (!currentVideoId) { toast('Select or process a video first', 'error'); return; }
+
+  const topK = parseInt(document.getElementById('top-k').value) || 5;
+  const btn = document.getElementById('ask-btn');
+  const btnText = document.getElementById('ask-btn-text');
+  const askProgress = document.getElementById('ask-progress');
+  const askProgressLabel = document.getElementById('ask-progress-label');
+
+  // Show user message
+  appendMessage('user', question);
+  document.getElementById('question-input').value = '';
+  document.getElementById('chat-empty').style.display = 'none';
+
+  // Insert a typing placeholder that will be replaced when answer arrives
+  const typingId = 'typing-' + Date.now();
+  appendTypingPlaceholder(typingId);
+
+  isAsking = true;
+
+  btn.disabled = true;
+  btnText.innerHTML = '<span class="spinner"></span>';
+  askProgress.classList.add('visible');
+
+  const askSteps = ['Embedding query...', 'Retrieving context...', 'Generating with Gemini...', 'Synthesizing speech...'];
+  let si = 0;
+  const stepInt = setInterval(() => {
+    if (si < askSteps.length - 1) askProgressLabel.textContent = askSteps[++si];
+  }, 4000);
+  askProgressLabel.textContent = askSteps[0];
+
+  try {
+    const r = await fetch(`${API}/ask`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ video_id: currentVideoId, question, top_k: topK })
+    });
+
+    clearInterval(stepInt);
+
+    if (!r.ok) {
+      const err = await r.json();
+      throw new Error(err.detail || `HTTP ${r.status}`);
+    }
+
+    const data = await r.json();
+    // Replace typing placeholder with actual answer
+    replaceTypingPlaceholder(typingId, data.answer, data.retrieved_chunks, data.audio_url);
+
+    askProgress.classList.remove('visible');
+
+  } catch (e) {
+    clearInterval(stepInt);
+    askProgress.classList.remove('visible');
+    appendMessage('system', `⚠ Error: ${e.message}`, { error: true });
+    toast('Error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btnText.textContent = 'Ask';
+    isAsking = false;
+  }
+}
+
+/* ─── Render Messages ──────────────────────────────────────────────────── */
+function appendMessage(role, text, extras = {}) {
+  const messages = document.getElementById('messages');
+  const id = 'msg-' + Date.now();
+  const isUser = role === 'user';
+
+  const avatarEmoji = isUser ? '👤' : '🤖';
+  const authorLabel = isUser ? 'You' : 'VidMind AI';
+  const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+  // Format text paragraphs
+  const paragraphs = text.split(/\n\n+/).filter(Boolean);
+  const formatted = paragraphs.map(p => `<p>${escHtml(p.trim())}</p>`).join('');
+
+  // Do not render retrieved chunks in the chat UI (keep only final answer visible)
+  let chunksHtml = '';
+
+  let audioHtml = '';
+  if (extras.audioUrl) {
+    audioHtml = `
+      <div class="audio-player">
+        <span class="audio-label">🔊 TTS</span>
+        <audio controls src="${extras.audioUrl}"></audio>
+      </div>
+    `;
+  }
+
+  const msgHtml = `
+    <div class="message msg-${isUser ? 'user' : 'system'}" id="${id}">
+      <div class="msg-avatar">${avatarEmoji}</div>
+      <div class="msg-body">
+        <div class="msg-meta">
+          <strong>${authorLabel}</strong>
+          <span>${timeStr}</span>
+        </div>
+        <div class="msg-text">${formatted}</div>
+        ${audioHtml}
+      </div>
+    </div>
+  `;
+
+  messages.insertAdjacentHTML('beforeend', msgHtml);
+  // Ensure the messages container scrolls to show the newest message
+  try {
+    const el = document.getElementById(id);
+    if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  } catch (e) {
+    // Fallback: set container scrollTop
+    messages.scrollTop = messages.scrollHeight;
+  }
+}
+
+function toggleChunks(btn) {
+  btn.classList.toggle('open');
+  btn.nextElementSibling.classList.toggle('open');
+}
+
+function getPrettyTitle(id){
+  try{
+    let s = String(id || '');
+    s = s.replace(/^yt[_-]?/i,'');
+    s = s.replace(/[_-]/g,' ');
+    s = s.replace(/\b([a-z])/g, (m)=>m.toUpperCase());
+    return s.length>48 ? s.substring(0,48)+'…' : s;
+  }catch(e){return id}
+}
+
+/* ─── Helpers ──────────────────────────────────────────────────────────── */
+function handleQuestionKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    askQuestion();
+  }
+}
+
+function useSuggestion(text) {
+  const el = document.getElementById('question-input');
+  el.value = text;
+  el.focus();
+}
+
+/* Typing placeholder helpers */
+function appendTypingPlaceholder(typingId) {
+  const messages = document.getElementById('messages');
+  const html = `
+    <div class="message msg-system" id="${typingId}">
+      <div class="msg-avatar">🤖</div>
+      <div class="msg-body">
+        <div class="msg-meta"><strong>VidMind AI</strong> • thinking…</div>
+        <div class="msg-text typing"> <span class="dotdot">●</span><span class="dotdot">●</span><span class="dotdot">●</span> </div>
+      </div>
+    </div>
+  `;
+  messages.insertAdjacentHTML('beforeend', html);
+  // scroll new typing placeholder into view
+  try { messages.scrollTop = messages.scrollHeight; } catch(e){}
+}
+
+function replaceTypingPlaceholder(typingId, answer, chunks, audioUrl) {
+  const node = document.getElementById(typingId);
+  if (!node) {
+    // When typing placeholder is missing, append only the final answer + audio (no chunks)
+    appendMessage('system', answer, { audioUrl: audioUrl });
+    return;
+  }
+  const safeText = escHtml(answer || '');
+  let audioHtml = '';
+  if (audioUrl) {
+    try {
+      const autoplay = (localStorage.getItem('vidmind_tts_autoplay') === 'true');
+      audioHtml = `<div class="audio-player"><span class="audio-label">🔊 TTS</span><audio controls ${autoplay ? 'autoplay' : ''} src="${escHtml(audioUrl)}"></audio></div>`;
+    } catch (e) { audioHtml = ''; }
+  }
+
+  const newHtml = `
+    <div class="msg-avatar">🤖</div>
+    <div class="msg-body">
+      <div class="msg-meta"><strong>VidMind AI</strong></div>
+      <div class="msg-text">${safeText}</div>
+      ${audioHtml}
+    </div>
+  `;
+  node.innerHTML = newHtml;
+  node.removeAttribute('id');
+  const messages = document.getElementById('messages');
+  // Scroll to the newest assistant message after replacing the typing placeholder
+  try {
+    // Find the last message element and scroll into view
+    const last = messages.querySelector('.message:last-child');
+    if (last && last.scrollIntoView) last.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    else messages.scrollTop = messages.scrollHeight;
+  } catch (e) { messages.scrollTop = messages.scrollHeight; }
+}
+
+function autoResizeTextarea(el) {
+  el.addEventListener('input', () => {
+    el.style.height = 'auto';
+    el.style.height = Math.min(el.scrollHeight, 120) + 'px';
+  });
+}
+
+function escHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function fmtTime(secs) {
+  if (secs == null) return '';
+  secs = Math.floor(secs);
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${s.toString().padStart(2,'0')}`;
+}
+
+function toast(msg, type = 'info') {
+  const tc = document.getElementById('toast-container');
+  const icons = { success: '✓', error: '✗', info: 'ℹ' };
+  const div = document.createElement('div');
+  div.className = `toast ${type}`;
+  div.innerHTML = `<span>${icons[type]}</span><span>${escHtml(msg)}</span>`;
+  tc.appendChild(div);
+  setTimeout(() => div.remove(), 4000);
+}
+</script>
+</body>
+</html>
