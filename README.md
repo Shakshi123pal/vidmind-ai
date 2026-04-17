@@ -1,8 +1,20 @@
-# VideoRAG 🎬🤖
+# VidMind AI
 
-**CPU-only Video Q&A system using RAG + Gemini Flash 2.5 + Kokoro TTS**
+Professional Video Q&A — retrieve concise, sourced answers from any video with optional synthesized audio.
 
-Ask anything about any video. Get text + voice answers.
+VidMind AI provides a scalable CPU-friendly RAG pipeline that converts video audio into searchable knowledge, retrieves relevant context, and generates clean, voice-enabled answers. It's designed for local development, containerized deployments, and lightweight production environments.
+
+---
+
+## Features
+
+- Fast CPU transcription using optimized Whisper variants for cost-effective processing
+- Semantic chunking + vector search (FAISS) for precise context retrieval
+- Configurable embedding models and LLM backend (Gemini-compatible by default)
+- Generated answers paired with source chunks and timestamps for auditability
+- Optional TTS output for audio replies (Kokoro or configurable TTS)
+- Simple REST API for ingestion, query, and management
+- Docker-ready for quick deployment and reproducible builds
 
 ---
 
@@ -15,59 +27,59 @@ Video URL
 yt-dlp (audio download)
    │
    ▼
-faster-whisper (CPU transcription)
+Transcription (faster-whisper / Whisper)
    │
    ▼
-Semantic Chunker (400 tok, 80 overlap)
+Semantic Chunker (configurable tokens + overlap)
    │
    ▼
-sentence-transformers/all-MiniLM-L6-v2 (batch embeddings)
+Embeddings (sentence-transformers or configurable)
    │
    ▼
-FAISS IndexFlatIP (persistent per-video index)
+FAISS (persistent per-video index)
    │
    ├──── Query ────────────────────────────────────┐
    │                                               │
 User Question → Embed → Top-K Retrieval → Context │
                                                    ▼
-                                          Gemini Flash 2.5
+                                       LLM (Gemini or configured model)
                                                    │
                                                    ▼
-                                          Kokoro TTS (audio)
+                                          Optional TTS (audio)
                                                    │
                                                    ▼
-                                       JSON: answer + chunks + audio
+                                       JSON: answer + sources + audio
 ```
 
 ---
 
 ## Quick Start
 
-### 1. Clone and configure
+1) Clone and configure
 
 ```bash
-git clone <repo>
-cd videorag
+git clone <your-repo-url>
+cd vidmind
 cp backend/.env.example backend/.env
-# Edit .env and add your GEMINI_API_KEY
+# Edit backend/.env and set GEMINI_API_KEY (and other variables as needed)
 ```
 
-### 2. Docker (recommended)
+2) Docker (recommended)
 
 ```bash
-# Build and run
+# Build and run with environment key
 GEMINI_API_KEY=your_key_here docker-compose up --build
 
-# Open browser
-open http://localhost:8000
+# Open the UI or API at http://localhost:8000
 ```
 
-### 3. Local Development
+3) Local development
 
 ```bash
 cd backend
 pip install -r requirements.txt
-export GEMINI_API_KEY=your_key_here
+# On Windows PowerShell
+$Env:GEMINI_API_KEY = 'your_key_here'
 uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
@@ -75,9 +87,9 @@ uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 ## API Reference
 
-### `POST /process_video`
+### POST /process_video
 
-Download, transcribe, and index a video.
+Download, transcribe, and index a video (returns `video_id` and processing status).
 
 ```bash
 curl -X POST http://localhost:8000/process_video \
@@ -85,22 +97,9 @@ curl -X POST http://localhost:8000/process_video \
   -d '{"video_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}'
 ```
 
-**Response:**
-```json
-{
-  "video_id": "yt_dQw4w9WgXcQ",
-  "transcript_length": 12500,
-  "num_chunks": 31,
-  "message": "Video successfully processed and indexed.",
-  "status": "success"
-}
-```
+### POST /ask
 
----
-
-### `POST /ask`
-
-Ask a question about a processed video.
+Ask a question about a processed video. Returns an answer, retrieved source chunks, and optional audio asset metadata.
 
 ```bash
 curl -X POST http://localhost:8000/ask \
@@ -112,34 +111,13 @@ curl -X POST http://localhost:8000/ask \
   }'
 ```
 
-**Response:**
-```json
-{
-  "answer": "This video is about...",
-  "retrieved_chunks": [
-    {
-      "chunk_id": 3,
-      "text": "...",
-      "start_time": 42.5,
-      "end_time": 87.3,
-      "similarity_score": 0.892
-    }
-  ],
-  "audio_file_path": "/app/audio_outputs/yt_dQw4w9WgXcQ_abc12345.wav",
-  "audio_url": "/audio/yt_dQw4w9WgXcQ_abc12345.wav",
-  "video_id": "yt_dQw4w9WgXcQ"
-}
-```
-
----
-
-### `GET /status`
+### GET /status
 
 ```bash
 curl http://localhost:8000/status
 ```
 
-### `DELETE /video/{video_id}`
+### DELETE /video/{video_id}
 
 ```bash
 curl -X DELETE http://localhost:8000/video/yt_dQw4w9WgXcQ
@@ -150,32 +128,32 @@ curl -X DELETE http://localhost:8000/video/yt_dQw4w9WgXcQ
 ## Tech Stack
 
 | Component | Technology |
-|-----------|-----------|
+|-----------|------------|
 | API Framework | FastAPI |
 | Video Download | yt-dlp |
-| Transcription | faster-whisper (CPU, int8) |
-| Embeddings | all-MiniLM-L6-v2 (384-dim) |
-| Vector DB | FAISS IndexFlatIP |
-| LLM | Gemini Flash 2.5 |
-| TTS | Kokoro TTS |
+| Transcription | faster-whisper / Whisper (CPU-optimized) |
+| Embeddings | sentence-transformers (configurable) |
+| Vector DB | FAISS |
+| LLM | Gemini-compatible (configurable) |
+| TTS | Kokoro TTS (optional) |
 | Audio | soundfile, librosa |
 
 ---
 
 ## Deployment
 
-### GCP Cloud Run
+### Container (GCP Cloud Run / any Docker host)
 
 ```bash
 # Build image
-docker build -t gcr.io/YOUR_PROJECT/videorag ./backend
+docker build -t gcr.io/YOUR_PROJECT/vidmind ./backend
 
 # Push
-docker push gcr.io/YOUR_PROJECT/videorag
+docker push gcr.io/YOUR_PROJECT/vidmind
 
-# Deploy
-gcloud run deploy videorag \
-  --image gcr.io/YOUR_PROJECT/videorag \
+# Deploy (example for Cloud Run)
+gcloud run deploy vidmind \
+  --image gcr.io/YOUR_PROJECT/vidmind \
   --platform managed \
   --region us-central1 \
   --memory 4Gi \
@@ -184,24 +162,14 @@ gcloud run deploy videorag \
   --set-env-vars GEMINI_API_KEY=your_key
 ```
 
-### Hugging Face Spaces
-
-1. Create a new Space with Docker SDK
-2. Upload the `backend/` folder contents to the Space
-3. Add `GEMINI_API_KEY` as a Secret in Space settings
-4. The Space will auto-build using the Dockerfile
-
-**Note:** Ensure your Space has enough CPU RAM (4GB+ recommended).
-
 ---
 
 ## Performance Notes
 
-- **Whisper base** model: ~10x realtime on modern CPU (1hr video ≈ 6 min)
-- **all-MiniLM-L6-v2**: batch embedding of 100 chunks ≈ 2-3 seconds on CPU
-- **FAISS**: sub-millisecond search on CPU for typical video sizes
-- **Cold start**: ~30-60 seconds for model loading (pre-baked in Docker image)
-- Recommend at least **4GB RAM** for production use
+- Transcription: optimized Whisper variants can process long audio on CPU with acceptable throughput
+- Embedding batching reduces overhead for large videos
+- FAISS provides low-latency retrieval for typical per-video index sizes
+- Recommend 4GB+ RAM for small production workloads; scale resources for high concurrency
 
 ---
 
@@ -217,12 +185,12 @@ gcloud run deploy videorag \
     ├── .env.example
     ├── main.py          ← FastAPI app + endpoints
     ├── transcribe.py    ← yt-dlp + faster-whisper
-    ├── embed.py         ← chunking + sentence-transformers
-    ├── rag.py           ← FAISS + Gemini Flash 2.5
-    ├── tts.py           ← Kokoro TTS
+    ├── embed.py         ← chunking + embeddings
+    ├── rag.py           ← retrieval + generation pipeline
+    ├── tts.py           ← Kokoro TTS integration
     ├── utils.py         ← shared utilities
     └── static/
-        └── index.html   ← dark UI frontend
+        └── index.html   ← UI frontend
 ```
 
 ---
@@ -231,10 +199,16 @@ gcloud run deploy videorag \
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `GEMINI_API_KEY` | ✅ | — | Google Gemini API key |
+| `GEMINI_API_KEY` | ✅ | — | Gemini / LLM API key |
 | `WHISPER_MODEL` | ❌ | `base` | Whisper model size |
 | `TTS_VOICE` | ❌ | `af_heart` | Kokoro voice ID |
 | `PORT` | ❌ | `8000` | Server port |
+
+---
+
+## Contributing
+
+Contributions are welcome. Please open issues for bugs or feature requests, and follow standard GitHub workflows for pull requests. Keep changes focused and include tests where practical.
 
 ---
 
