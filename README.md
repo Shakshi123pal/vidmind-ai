@@ -4,6 +4,10 @@ Professional Video Q&A — retrieve concise, sourced answers from any video with
 
 VidMind AI provides a scalable CPU-friendly RAG pipeline that converts video audio into searchable knowledge, retrieves relevant context, and generates clean, voice-enabled answers. It's designed for local development, containerized deployments, and lightweight production environments.
 
+## 🎥 Demo
+See VidMind AI in action — how it converts videos into intelligent Q&A responses:
+demo of VidMind AI: https://drive.google.com/file/d/1yj2RRyk7zZVsZ92j7HON7ME7Vcrk_1s1/view?usp=sharing
+
 ---
 
 ## Features
