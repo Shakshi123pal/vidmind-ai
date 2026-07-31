@@ -60,19 +60,47 @@ class VideoTranscriber:
             return audio_path
 
         logger.info(f"Downloading audio from: {url}")
-        
+
+        cookies_path = None
+        cookie_candidates = [
+            Path.cwd() / "cookies.txt",
+            Path(__file__).resolve().parent.parent / "cookies.txt",
+            output_dir / "cookies.txt",
+        ]
+        for candidate in cookie_candidates:
+            if candidate.exists():
+                cookies_path = candidate
+                logger.info(f"Found yt-dlp cookies file: {cookies_path}")
+                break
+
+        if cookies_path is None:
+            logger.info("No cookies.txt found; continuing without cookies.")
+
         cmd = [
             "yt-dlp",
+            "--no-playlist",
+            "--no-warnings",
+            "--quiet",
+            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
+            "--add-header", "Accept-Language: en-US,en;q=0.9",
+            "--add-header", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "--add-header", "Sec-Fetch-Mode: navigate",
+            "--add-header", "Sec-Fetch-Site: none",
+            "--add-header", "Sec-Fetch-User: ?1",
+            "--add-header", "Upgrade-Insecure-Requests: 1",
+            "--add-header", "Referer: https://www.youtube.com/",
+            "--extractor-args", "youtube:player_client=android,web,default",
+            "--extractor-args", "youtube:player_skip=webpage,configs",
             "-f", "bestaudio/best",
             "--extract-audio",
             "--audio-format", "mp3",
             "--audio-quality", "5",
-            "--no-playlist",
-            "--no-warnings",
-            "--quiet",
             "--output", output_template,
             url
         ]
+
+        if cookies_path is not None:
+            cmd.extend(["--cookies", str(cookies_path)])
 
         try:
             result = subprocess.run(
