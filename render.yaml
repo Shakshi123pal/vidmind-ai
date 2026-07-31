@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: vidmind-ai
+    env: docker
+    plan: starter
+    region: oregon
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: PORT
+        value: 7860
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: WHISPER_MODEL
+        value: base
+      - key: TTS_VOICE
+        value: af_heart
+      - key: GEMINI_API_KEY
+        sync: false

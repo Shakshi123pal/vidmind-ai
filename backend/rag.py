@@ -20,9 +20,9 @@ logger = logging.getLogger("videorag.rag")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 # Model name can be overridden via the GEMINI_MODEL environment variable.
-# Default uses a generic Gemini model identifier; set `GEMINI_MODEL` in
-# `backend/.env` or the process environment to a supported model for your account.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash-latest")
+# Default uses a Gemini 2.5 Flash identifier so the app aligns with the
+# model you mentioned in your environment.
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
 
 class RAGPipeline:
