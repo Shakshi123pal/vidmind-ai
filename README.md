@@ -212,6 +212,3 @@ Contributions are welcome. Please open issues for bugs or feature requests, and 
 
 ---
 
-## License
-
-MIT
