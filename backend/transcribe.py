@@ -76,8 +76,7 @@ class VideoTranscriber:
         if cookies_path is None:
             logger.info("No cookies.txt found; continuing without cookies.")
 
-        cmd = [
-            "yt-dlp",
+        common_args = [
             "--no-playlist",
             "--no-warnings",
             "--quiet",
@@ -89,30 +88,55 @@ class VideoTranscriber:
             "--add-header", "Sec-Fetch-User: ?1",
             "--add-header", "Upgrade-Insecure-Requests: 1",
             "--add-header", "Referer: https://www.youtube.com/",
-            "--extractor-args", "youtube:player_client=android,web,default",
-            "--extractor-args", "youtube:player_skip=webpage,configs",
             "-f", "bestaudio/best",
             "--extract-audio",
             "--audio-format", "mp3",
             "--audio-quality", "5",
             "--output", output_template,
-            url
+        ]
+
+        commands = []
+        primary_cmd = ["yt-dlp"] + common_args + [
+            "--extractor-args", "youtube:player_client=android,web,default",
+            "--extractor-args", "youtube:player_skip=webpage,configs",
+            url,
+        ]
+        fallback_cmd = ["yt-dlp"] + common_args + [
+            "--extractor-args", "youtube:player_client=tv_embedded,web_safari,android",
+            "--extractor-args", "youtube:player_skip=webpage,configs",
+            url,
         ]
 
         if cookies_path is not None:
-            cmd.extend(["--cookies", str(cookies_path)])
+            primary_cmd.extend(["--cookies", str(cookies_path)])
+            fallback_cmd.extend(["--cookies", str(cookies_path)])
 
-        try:
-            result = subprocess.run(
-                cmd,
-                capture_output=True,
-                text=True,
-                timeout=600  # 10 min timeout
-            )
-            if result.returncode != 0:
-                raise RuntimeError(f"yt-dlp failed: {result.stderr[:500]}")
-        except subprocess.TimeoutExpired:
-            raise RuntimeError("Audio download timed out (>10 minutes)")
+        commands.append(primary_cmd)
+        commands.append(fallback_cmd)
+
+        result = None
+        last_error = None
+
+        for cmd in commands:
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=600  # 10 min timeout
+                )
+                if result.returncode == 0:
+                    break
+
+                last_error = result.stderr.strip()
+                if "Sign in to confirm you're not a bot" not in last_error and "confirm you're not a bot" not in last_error:
+                    break
+                logger.warning("YouTube anti-bot challenge detected; retrying with alternate yt-dlp extractor settings.")
+            except subprocess.TimeoutExpired:
+                raise RuntimeError("Audio download timed out (>10 minutes)")
+
+        if result is None or result.returncode != 0:
+            raise RuntimeError(f"yt-dlp failed: {last_error[:500] if last_error else 'unknown yt-dlp error'}")
 
         if not Path(audio_path).exists():
             # Try to find any downloaded file
