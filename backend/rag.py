@@ -4,6 +4,7 @@ Persistent FAISS indexes per video
 """
 
 import os
+import re
 import json
 import logging
 import pickle
@@ -12,17 +13,17 @@ from typing import Optional
 
 import faiss
 import numpy as np
-import google.generativeai as genai
 from concurrent.futures import ThreadPoolExecutor, TimeoutError as FutureTimeout
 import time
+from google import genai as google_genai
+from google.genai import types as genai_types
 
 logger = logging.getLogger("videorag.rag")
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-# Model name can be overridden via the GEMINI_MODEL environment variable.
-# Default uses a Gemini 2.5 Flash identifier so the app aligns with the
-# model you mentioned in your environment.
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+DEFAULT_GEMINI_MODEL = os.getenv("GEMINI_MODEL", "")
+# Optional override from environment; keep discovery dynamic and do not hardcode a specific Gemini family.
+GEMINI_MODEL = DEFAULT_GEMINI_MODEL
 
 
 class RAGPipeline:
@@ -39,9 +40,13 @@ class RAGPipeline:
         self.index_dir = Path(index_dir)
         self.index_dir.mkdir(parents=True, exist_ok=True)
         self._indexes: dict = {}    # video_id -> faiss.Index
-        self._chunks: dict = {}     # video_id -> list[dict]
+        self._chunks: dict = {}    # video_id -> list[dict]
+        self._client = None
+        self._available_gemini_models: list[str] = []
+        self._unavailable_gemini_models: set[str] = set()
         self._configure_gemini()
-        logger.info("Using GEMINI_MODEL=%s", GEMINI_MODEL)
+        self._selected_model = self._discover_compatible_model() or GEMINI_MODEL
+        logger.info("Using selected Gemini model=%s", self._selected_model or "<none>")
         logger.info(f"RAGPipeline initialized (index_dir={index_dir})")
 
     def _configure_gemini(self):
@@ -51,9 +56,8 @@ class RAGPipeline:
             logger.warning("GEMINI_API_KEY not set. LLM generation will fail.")
             return
         try:
-            # Configure the genai client with the provided key
-            genai.configure(api_key=key)
-            logger.info("Gemini API configured.")
+            self._client = google_genai.Client(api_key=key)
+            logger.info("Gemini API configured with google-genai client.")
         except Exception as e:
             # Log and continue; downstream code will surface errors if calls fail
             logger.exception("Failed to configure Gemini API client: %s", e)
@@ -62,70 +66,81 @@ class RAGPipeline:
         return self.index_dir / video_id
 
     def _discover_compatible_model(self) -> Optional[str]:
-        """Query the Gemini service for available models and pick a compatible one.
+        """Return the first currently supported Gemini model name for the configured API key."""
+        candidates = self._discover_supported_models()
+        return candidates[0] if candidates else None
 
-        Returns a model name string or None if nothing suitable is found.
-        """
+    def _discover_supported_models(self) -> list[str]:
+        """List Gemini model names that support content generation via the official google-genai SDK."""
+        if self._client is None:
+            return []
+
         try:
-            # Attempt to list models from the SDK. Response shape may vary by SDK version.
-            models = None
-            if hasattr(genai, "list_models"):
-                models = genai.list_models()
-            elif hasattr(genai, "Models") and hasattr(genai.Models, "list"):
-                models = genai.Models.list()
+            models = list(self._client.models.list())
+            candidates: list[str] = []
 
-            if not models:
-                logger.debug("No models returned by genai.list_models()")
-                return None
-
-            # models may be an iterable of objects or a mapping
-            candidates = []
-            for m in models:
-                # Support dict-like or object-like
-                name = None
-                supported = None
-                try:
-                    name = m.get("name") if isinstance(m, dict) else getattr(m, "name", None)
-                except Exception:
-                    name = None
-                try:
-                    supported = m.get("supported_methods") if isinstance(m, dict) else getattr(m, "supported_methods", None)
-                except Exception:
-                    supported = None
-
+            for model in models:
+                name = getattr(model, "name", None) or getattr(model, "model", None)
                 if not name:
-                    # Try alternate keys
-                    try:
-                        name = m.get("model") if isinstance(m, dict) else getattr(m, "model", None)
-                    except Exception:
-                        name = None
+                    continue
+                if name.startswith("models/"):
+                    name = name.split("/", 1)[1]
 
-                if name:
-                    candidates.append((name, supported))
+                supported_actions = getattr(model, "supported_actions", None) or getattr(model, "supported_methods", None)
+                if not supported_actions:
+                    supported_actions = getattr(model, "supported_generation_methods", None)
 
-            # Prefer exact match
-            for name, supported in candidates:
-                if GEMINI_MODEL and GEMINI_MODEL in name:
-                    logger.info(f"Discovered compatible model: {name}")
-                    return name
+                support_text = ""
+                if isinstance(supported_actions, (list, tuple, set)):
+                    support_text = " ".join(str(item) for item in supported_actions).lower()
+                elif supported_actions is not None:
+                    support_text = str(supported_actions).lower()
 
-            # Otherwise pick a model that supports generateContent or chat
-            for name, supported in candidates:
-                if not supported:
-                    # Unknown supported list -> return first candidate
-                    logger.info(f"Selecting model (unknown capabilities): {name}")
-                    return name
-                # supported could be a list or comma-separated string
-                s = supported if isinstance(supported, (list, tuple)) else str(supported)
-                if any(k in str(s).lower() for k in ["generatecontent", "generate", "chat", "text"]):
-                    logger.info(f"Selecting supported model: {name} (supports={supported})")
-                    return name
+                if any(token in support_text for token in ["generatecontent", "generate", "chat", "text"]):
+                    if name not in candidates:
+                        candidates.append(name)
 
-            logger.debug("No suitable model found in model list")
-            return None
+            env_model = (DEFAULT_GEMINI_MODEL or GEMINI_MODEL or "").strip()
+            if env_model and env_model not in candidates:
+                candidates.append(env_model)
+
+            if not candidates:
+                logger.debug("No generateContent-capable Gemini models were returned by the API")
+                return []
+
+            logger.info("Discovered Gemini generation models: %s", candidates)
+            self._available_gemini_models = candidates
+            return candidates
         except Exception:
-            logger.exception("Failed to list/inspect Gemini models")
-            return None
+            logger.exception("Failed to list/inspect Gemini models using google-genai")
+            return []
+
+    def _is_text_generation_model(self, model_name: str) -> bool:
+        """Ignore Gemini preview, audio, image, robotics, embedding, and live-only models."""
+        if not model_name:
+            return False
+
+        name = model_name.strip().lower()
+        if name.startswith("models/"):
+            name = name.split("/", 1)[1]
+
+        blocked_tokens = (
+            "embedding",
+            "tts",
+            "audio",
+            "image",
+            "robotics",
+            "live",
+            "preview",
+            "omni",
+        )
+        if any(token in name for token in blocked_tokens):
+            return False
+
+        if name.startswith("aqa"):
+            return False
+
+        return True
 
     def is_indexed(self, video_id: str) -> bool:
         """Check if a video has a FAISS index."""
@@ -238,130 +253,224 @@ class RAGPipeline:
 
         context = "\n\n".join(context_parts)
 
-        prompt = f"""You are an expert video content analyst. You have been given excerpts from a video transcript and must answer the user's question in an engaging, insightful, and creative way.
+        prompt = f"""Answer naturally in plain English.
 
-TRANSCRIPT EXCERPTS:
+Use the retrieved context to explain the video in a conversational way, as if you watched it and are describing it to someone.
+Keep it to about 120-150 words in one paragraph.
+Do not use headings, bullets, labels, or markdown.
+
+CONTEXT:
 {context}
 
-USER QUESTION: {question}
+QUESTION: {question}
+"""
 
-INSTRUCTIONS:
-- Answer based on the transcript excerpts provided
-- Be conversational, engaging, and informative
-- If the answer isn't in the excerpts, say so honestly
-- Include specific details and timestamps when relevant
-- Keep your answer focused and well-structured
-- Aim for 2-4 paragraphs maximum
+        preferred_model = self._selected_model or self._discover_compatible_model() or GEMINI_MODEL
+        discovered_models = self._discover_supported_models()
+        candidate_models = []
+        for model_name in [preferred_model, *discovered_models]:
+            if not model_name or model_name in candidate_models:
+                continue
+            if self._is_text_generation_model(model_name):
+                candidate_models.append(model_name)
 
-ANSWER:"""
+        def extract_plain_text(payload) -> Optional[str]:
+            """Recursively unwrap Gemini SDK response objects to the plain generated text string."""
+            if payload is None:
+                return None
 
-        # Simple, robust generation path: try configured model, then discover alternatives.
-        from google.api_core import exceptions as api_exceptions
+            if isinstance(payload, str):
+                text = payload.strip()
+                return text or None
+
+            if isinstance(payload, dict):
+                for key in ("text", "output_text", "content", "parts", "candidates"):
+                    if key in payload:
+                        extracted = extract_plain_text(payload[key])
+                        if extracted:
+                            return extracted
+                return None
+
+            if isinstance(payload, (list, tuple)):
+                for item in payload:
+                    extracted = extract_plain_text(item)
+                    if extracted:
+                        return extracted
+                return None
+
+            for attr in ("text", "output_text", "content", "parts", "candidates"):
+                value = getattr(payload, attr, None)
+                extracted = extract_plain_text(value)
+                if extracted:
+                    return extracted
+
+            return None
+
+        def sanitize_answer(answer: str) -> str:
+            """Keep only the final human-readable answer and discard prompt scaffolding."""
+            cleaned = str(answer or "").strip()
+            if not cleaned:
+                return ""
+
+            cleaned = " ".join(cleaned.splitlines()).strip()
+            cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+            section_markers = (
+                "question:",
+                "constraint:",
+                "constraints:",
+                "excerpt:",
+                "draft:",
+                "word count:",
+                "constraint check:",
+                "self-correction:",
+                "final check:",
+                "final polish:",
+                "final answer:",
+                "answer:",
+                "role:",
+                "task:",
+                "drafting:",
+                "self-reflection:",
+            )
+
+            last_marker_index = -1
+            last_marker = None
+            lowered_text = cleaned.lower()
+            for marker in section_markers:
+                idx = lowered_text.rfind(marker)
+                if idx > last_marker_index:
+                    last_marker_index = idx
+                    last_marker = marker
+
+            if last_marker and last_marker_index != -1:
+                cleaned = cleaned[last_marker_index + len(last_marker) :].strip()
+
+            prompt_fragments = (
+                "constraint 1:",
+                "constraint 2:",
+                "constraint 3:",
+                "use only the provided transcript excerpts.",
+                "answer based only on the excerpts.",
+                "do not output prompt text.",
+                "do not mention the prompt.",
+                "role:",
+                "task:",
+                "constraints:",
+                "drafting:",
+                "self-reflection:",
+            )
+            lowered_cleaned = cleaned.lower()
+            for fragment in prompt_fragments:
+                if lowered_cleaned.startswith(fragment):
+                    cleaned = cleaned[len(fragment) :].strip()
+                    lowered_cleaned = cleaned.lower()
+
+            cleaned = re.sub(
+                r"^(?:question|constraint|constraints|excerpt|draft|word count|constraint check|self-correction|final check|final polish|role|task|answer|final answer)\s*[:\-]\s*",
+                "",
+                cleaned,
+                flags=re.I,
+            ).strip()
+            cleaned = re.sub(
+                r"\b(?:role|task|constraint|constraints|draft|excerpt|word count|final answer)\b\s*[:\-]\s*",
+                "",
+                cleaned,
+                flags=re.I,
+            )
+
+            cleaned = re.sub(r"```[\s\S]*?```", " ", cleaned)
+            cleaned = re.sub(r"^\s*#{1,6}\s*", "", cleaned, flags=re.M)
+            cleaned = re.sub(r"^\s*(?:[-*+]\s+|\d+\.\s+)", "", cleaned, flags=re.M)
+            cleaned = re.sub(r"^\s*[•\-]\s*", "", cleaned, flags=re.M)
+            cleaned = re.sub(r"\*\*([^*]+)\*\*", r"\1", cleaned)
+            cleaned = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"\1", cleaned)
+            cleaned = re.sub(r"`([^`]+)`", r"\1", cleaned)
+            cleaned = re.sub(r"\[([^\]]+)\]\([^)]+\)", r"\1", cleaned)
+            cleaned = re.sub(r"[*_`]+", "", cleaned)
+            cleaned = re.sub(r"\s+", " ", cleaned).strip()
+
+            if re.search(
+                r"(?i)\b(?:question|constraint|constraints|excerpt|draft|word count|self-reflection|final answer|final polish|role|task|transcript)\b\s*[:\-]",
+                cleaned,
+            ):
+                return ""
+
+            if re.search(r"(?i)\b(?:wait, the prompt says|let's think|reasoning)\b", cleaned):
+                return ""
+
+            if re.search(r"(?:^|\s)(?:[-*+]|\d+\.|#+)\s", cleaned):
+                return ""
+
+            cleaned = re.sub(r"[.!?]+$", "", cleaned).strip()
+            if not re.search(r"[.!?]$", cleaned):
+                cleaned = f"{cleaned}."
+
+            return cleaned.strip()
 
         def try_model(model_name: str) -> Optional[str]:
             """Try to generate text with the given model name. Returns answer or None."""
             try:
-                # ensure client configured
-                try:
-                    genai.configure(api_key=key)
-                except Exception:
-                    logger.debug("genai.configure() call failed or already configured", exc_info=True)
+                if model_name in self._unavailable_gemini_models:
+                    logger.info("Skipping cached unavailable Gemini model %s", model_name)
+                    return None
 
-                # Prefer modern GenerativeModel if available
-                if hasattr(genai, "GenerativeModel"):
-                    model = genai.GenerativeModel(model_name)
-                    response = model.generate_content(
-                        prompt,
-                        generation_config=genai.types.GenerationConfig(
-                            temperature=0.7,
-                            max_output_tokens=1024,
-                            top_p=0.9,
-                        ),
-                    )
-                    answer = getattr(response, "text", None)
-                    if not answer:
-                        candidates_resp = getattr(response, "candidates", None)
-                        if candidates_resp and len(candidates_resp) > 0:
-                            cand = candidates_resp[0]
-                            answer = getattr(cand, "output_text", None) or getattr(cand, "text", None) or getattr(cand, "content", None)
-                    if answer:
-                        return str(answer).strip()
+                if self._client is None:
+                    self._configure_gemini()
+                if self._client is None:
+                    return None
 
-                # Fallbacks for older SDK variants
-                if hasattr(genai, "generate_text"):
-                    resp = genai.generate_text(model=model_name, prompt=prompt, temperature=0.7, max_output_tokens=1024, top_p=0.9)
-                    answer = getattr(resp, "text", None) or getattr(resp, "output", None)
-                    if answer:
-                        return str(answer).strip()
+                response = self._client.models.generate_content(
+                    model=model_name,
+                    contents=prompt,
+                    config=genai_types.GenerateContentConfig(
+                        temperature=0.7,
+                        max_output_tokens=2048,
+                        top_p=0.9,
+                    ),
+                )
 
-                if hasattr(genai, "generate"):
-                    resp = genai.generate(model=model_name, prompt=prompt, temperature=0.7, max_output_tokens=1024)
-                    answer = getattr(resp, "text", None) or getattr(resp, "output", None)
-                    if answer:
-                        return str(answer).strip()
-
+                answer = extract_plain_text(response)
+                if answer:
+                    final_answer = sanitize_answer(str(answer))
+                    if final_answer:
+                        word_count = len(re.findall(r"\b\w+\b", final_answer))
+                        if 80 <= word_count <= 180:
+                            return final_answer
+                        logger.info(
+                            "Discarded model %s response because it did not fit the accepted plain-English length window.",
+                            model_name,
+                        )
+                        return None
+                    logger.info("Discarded prompt-scaffolding response from model %s and will try the next compatible model.", model_name)
+                    return None
                 return None
-            except api_exceptions.GoogleAPICallError:
-                # propagate API call errors to caller for handling (NotFound, ResourceExhausted, etc.)
-                raise
-            except Exception:
+            except Exception as exc:
+                err_text = str(exc).lower()
+                if "404" in err_text or "not found" in err_text or "429" in err_text or "quota" in err_text or "resource_exhausted" in err_text:
+                    self._unavailable_gemini_models.add(model_name)
+                    raise
                 logger.exception("Error while generating with model %s", model_name)
                 return None
 
-        # First try the configured model
-        try:
-            ans = try_model(GEMINI_MODEL)
-            if ans:
-                return ans
-        except api_exceptions.GoogleAPICallError as gerr:
-            msg = str(gerr).lower()
-            logger.exception("API error with configured model %s: %s", GEMINI_MODEL, repr(gerr))
-            # If model not found, attempt discovery
-            if isinstance(gerr, api_exceptions.NotFound) or "not found" in msg:
-                logger.info("Configured model %s not found; attempting discovery", GEMINI_MODEL)
-                try:
-                    alt = self._discover_compatible_model()
-                    if alt and alt != GEMINI_MODEL:
-                        try:
-                            ans = try_model(alt)
-                            if ans:
-                                logger.info("Generation succeeded with discovered model %s", alt)
-                                return ans
-                        except api_exceptions.GoogleAPICallError as g2:
-                            logger.exception("API error with discovered model %s: %s", alt, repr(g2))
-                            # fall through to friendly message below
-                except Exception:
-                    logger.exception("Model discovery failed")
-            # Rate limit or quota errors
-            if isinstance(gerr, api_exceptions.ResourceExhausted) or "rate" in msg or "429" in msg or "quota" in msg:
-                logger.error("Rate limit or quota hit: %s", repr(gerr))
-                return "Too many requests, please wait a moment."
-            # Other API errors will fall through to fallback message
-        except Exception:
-            logger.exception("Unexpected error trying configured Gemini model %s", GEMINI_MODEL)
-
-        # As a last effort, attempt model discovery proactively
-        try:
-            alt = self._discover_compatible_model()
-            if alt and alt != GEMINI_MODEL:
-                try:
-                    ans = try_model(alt)
-                    if ans:
-                        logger.info("Generation succeeded with discovered model %s", alt)
-                        return ans
-                except api_exceptions.GoogleAPICallError as gerr2:
-                    msg2 = str(gerr2).lower()
-                    logger.exception("API error with discovered model %s: %s", alt, repr(gerr2))
-                    if isinstance(gerr2, api_exceptions.ResourceExhausted) or "rate" in msg2 or "429" in msg2 or "quota" in msg2:
-                        return "Too many requests, please wait a moment."
-        except Exception:
-            logger.exception("Model discovery failed during fallback")
+        for model_name in candidate_models:
+            try:
+                ans = try_model(model_name)
+                if ans:
+                    logger.info("Generation succeeded with model %s", model_name)
+                    return ans
+            except Exception as gerr:
+                msg = str(gerr).lower()
+                logger.exception("API error with Gemini model %s: %s", model_name, repr(gerr))
+                if "404" in msg or "not found" in msg or "429" in msg or "quota" in msg or "resource_exhausted" in msg:
+                    logger.info("Model %s unavailable; caching and trying next available Gemini model.", model_name)
+                    continue
+                if "rate" in msg:
+                    logger.error("Rate limit or quota hit: %s", repr(gerr))
+                    return "Too many requests, please wait a moment."
 
         logger.error("All generation attempts exhausted")
-        return (
-            "Sorry, I couldn't generate an answer right now because the language model service failed. "
-            "Please try again in a few moments. If the problem persists, check the server logs or your GEMINI_API_KEY configuration."
-        )
+        return "Sorry, I couldn't generate a clean answer right now."
 
     def delete_index(self, video_id: str):
         """Delete a video's FAISS index."""

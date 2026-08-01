@@ -1,11 +1,9 @@
-venv/
-.venv/
 .env
-
+backend/cookies.txt
+__pycache__/
+*.pyc
 audio_outputs/
 temp/
 faiss_indexes/
-sessions/
-
-__pycache__/
-*.pyc
+*.mp3
+*.m4a

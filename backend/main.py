@@ -21,10 +21,11 @@ from dotenv import load_dotenv
 from tts import TTSEngine
 from utils import ensure_dirs, cleanup_audio, get_video_id
 
-# Load environment variables from backend/.env before importing modules that rely on them
+# Load environment variables from backend/.env before importing modules that rely on them.
+# override=True ensures the local workspace .env wins over any stale shell environment.
 env_path = Path(__file__).resolve().parent / '.env'
 if env_path.exists():
-    load_dotenv(dotenv_path=str(env_path))
+    load_dotenv(dotenv_path=str(env_path), override=True)
 
 # Import RAG after loading env so it can read GEMINI_API_KEY at import time
 from rag import RAGPipeline

@@ -6,7 +6,8 @@ VidMind AI provides a scalable CPU-friendly RAG pipeline that converts video aud
 
 ##  you can see there
 
-
+# you can see there
+![alt text](vidmind_ai.png)
 
 ## Features
 

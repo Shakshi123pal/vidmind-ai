@@ -80,15 +80,6 @@ class VideoTranscriber:
             "--no-playlist",
             "--no-warnings",
             "--quiet",
-            "--user-agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36",
-            "--add-header", "Accept-Language: en-US,en;q=0.9",
-            "--add-header", "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "--add-header", "Sec-Fetch-Mode: navigate",
-            "--add-header", "Sec-Fetch-Site: none",
-            "--add-header", "Sec-Fetch-User: ?1",
-            "--add-header", "Upgrade-Insecure-Requests: 1",
-            "--add-header", "Referer: https://www.youtube.com/",
-            "-f", "bestaudio/best",
             "--extract-audio",
             "--audio-format", "mp3",
             "--audio-quality", "5",
@@ -96,26 +87,33 @@ class VideoTranscriber:
         ]
 
         commands = []
-        primary_cmd = ["yt-dlp"] + common_args + [
-            "--extractor-args", "youtube:player_client=android,web,default",
-            "--extractor-args", "youtube:player_skip=webpage,configs",
-            url,
-        ]
-        fallback_cmd = ["yt-dlp"] + common_args + [
-            "--extractor-args", "youtube:player_client=tv_embedded,web_safari,android",
-            "--extractor-args", "youtube:player_skip=webpage,configs",
-            url,
-        ]
 
-        if cookies_path is not None:
-            primary_cmd.extend(["--cookies", str(cookies_path)])
-            fallback_cmd.extend(["--cookies", str(cookies_path)])
+        def build_cmd(*extra_args: str):
+            cmd = ["yt-dlp"] + common_args
+            if cookies_path is not None:
+                cmd.extend(["--cookies", str(cookies_path)])
+            cmd.extend(extra_args)
+            cmd.append(url)
+            return cmd
 
-        commands.append(primary_cmd)
-        commands.append(fallback_cmd)
+        # Try a standard cookie-authenticated audio extraction first.
+        commands.append(build_cmd())
+
+        # Retry with a direct best-audio selector if the default path is unavailable.
+        commands.append(build_cmd("-f", "bestaudio/best"))
+
+        # Final fallback uses the same simple cookie-based path.
+        commands.append(build_cmd("-f", "bestaudio[ext=m4a]/bestaudio[ext=mp4]/bestaudio[ext=webm]/bestaudio/best"))
 
         result = None
         last_error = None
+
+        retry_messages = (
+            "Sign in to confirm you're not a bot",
+            "Requested format is not available",
+            "Only images are available for download",
+            "YouTube is no longer supported in this application or device",
+        )
 
         for cmd in commands:
             try:
@@ -129,13 +127,20 @@ class VideoTranscriber:
                     break
 
                 last_error = result.stderr.strip()
-                if "Sign in to confirm you're not a bot" not in last_error and "confirm you're not a bot" not in last_error:
-                    break
-                logger.warning("YouTube anti-bot challenge detected; retrying with alternate yt-dlp extractor settings.")
+                retryable = any(msg in last_error for msg in retry_messages)
+                if retryable:
+                    logger.warning("YouTube extraction path failed; retrying with alternate yt-dlp settings.")
+                    continue
+                break
             except subprocess.TimeoutExpired:
                 raise RuntimeError("Audio download timed out (>10 minutes)")
 
         if result is None or result.returncode != 0:
+            if last_error and any(msg in last_error for msg in retry_messages):
+                raise RuntimeError(
+                    "YouTube audio download is unavailable for this video in the current environment. "
+                    "The video may be restricted, require browser cookies, or only expose non-audio assets."
+                )
             raise RuntimeError(f"yt-dlp failed: {last_error[:500] if last_error else 'unknown yt-dlp error'}")
 
         if not Path(audio_path).exists():
