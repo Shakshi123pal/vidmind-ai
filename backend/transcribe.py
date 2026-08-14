@@ -63,9 +63,10 @@ class VideoTranscriber:
 
         cookies_path = None
         cookie_candidates = [
-            Path.cwd() / "cookies.txt",
-            Path(__file__).resolve().parent.parent / "cookies.txt",
-            output_dir / "cookies.txt",
+        Path("/etc/secrets/cookies.txt"),  # Render Secret File
+        Path.cwd() / "cookies.txt",        # Local
+        Path(__file__).resolve().parent.parent / "cookies.txt",
+        output_dir / "cookies.txt",
         ]
         for candidate in cookie_candidates:
             if candidate.exists():
