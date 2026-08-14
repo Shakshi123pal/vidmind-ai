@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     curl \
     wget \
+    unzip \
     ca-certificates \
     espeak \
     espeak-ng \
