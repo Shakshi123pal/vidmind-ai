@@ -17,9 +17,7 @@ ctranslate2==4.5.0
 # ─── Embeddings ───────────────────────────────────────────────────────────────
 sentence-transformers==3.3.1
 transformers==4.47.1
-torch==2.5.1+cpu          # CPU-only PyTorch
-torchvision==0.20.1+cpu
---extra-index-url https://download.pytorch.org/whl/cpu
+
 
 # ─── Vector Database ─────────────────────────────────────────────────────────
 faiss-cpu==1.9.0
