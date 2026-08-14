@@ -8,7 +8,7 @@ python-multipart==0.0.12
 pydantic==2.10.3
 
 # ─── Video Download ───────────────────────────────────────────────────────────
-yt-dlp==2026.07.04
+yt-dlp[default]==2026.07.04
 
 # ─── Transcription (CPU-optimized) ───────────────────────────────────────────
 faster-whisper==1.1.0
