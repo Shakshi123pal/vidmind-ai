@@ -17,6 +17,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libespeak-ng1 \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+# Install Deno for yt-dlp YouTube JavaScript challenges
+RUN curl -fsSL https://deno.land/install.sh | sh
+
+ENV PATH="/root/.deno/bin:${PATH}"
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
