@@ -125,7 +125,7 @@ class VideoTranscriber:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=120
+                timeout=300
                 )
             
                 logger.info(f"yt-dlp return code: {result.returncode}")
