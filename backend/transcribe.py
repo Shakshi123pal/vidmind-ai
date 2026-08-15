@@ -20,7 +20,7 @@ class VideoTranscriber:
     Uses 'base' model for balance of speed and accuracy on CPU.
     """
 
-    def __init__(self, model_size: str = "base", device: str = "cpu", compute_type: str = "int8"):
+    def __init__(self, model_size: str = "tiny", device: str = "cpu", compute_type: str = "int8"):
         self.model_size = model_size
         self.device = device
         self.compute_type = compute_type
@@ -36,7 +36,7 @@ class VideoTranscriber:
                 self.model_size,
                 device=self.device,
                 compute_type=self.compute_type,
-                num_workers=2
+                num_workers=1
             )
             logger.info("Whisper model loaded successfully.")
         return self._model
@@ -172,8 +172,8 @@ class VideoTranscriber:
 
         segments_gen, info = model.transcribe(
             audio_path,
-            beam_size=3,
-            best_of=3,
+            beam_size=1,
+            best_of=1,
             temperature=0.0,
             vad_filter=True,
             vad_parameters=dict(min_silence_duration_ms=500),
