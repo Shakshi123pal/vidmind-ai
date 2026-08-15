@@ -6,6 +6,7 @@ FastAPI backend with RAG pipeline
 import os
 import uuid
 import logging
+import gc
 from pathlib import Path
 from typing import Optional
 
@@ -198,10 +199,24 @@ async def process_video(request: ProcessVideoRequest):
         # Step 1 & 2: Download and transcribe
         transcriber = get_transcriber()
         logger.info(f"Transcribing video {video_id}...")
-        transcript, segments = transcriber.transcribe_url(video_url, temp_dir=TEMP_DIR)
+        transcript, segments = transcriber.transcribe_url(
+            video_url,
+            temp_dir=TEMP_DIR
+        )
+        
+        # IMPORTANT: release Whisper memory before loading embedding model
+        global _transcriber
+        _transcriber = None
+        del transcriber
+        gc.collect()
+        
+        logger.info("Whisper model released from memory.")
         
         if not transcript:
-            raise HTTPException(status_code=422, detail="Failed to transcribe video - empty transcript")
+            raise HTTPException(
+                status_code=422,
+                detail="Failed to transcribe video - empty transcript"
+            )
         
         logger.info(f"Transcript length: {len(transcript)} chars")
         
@@ -212,6 +227,7 @@ async def process_video(request: ProcessVideoRequest):
         
         # Step 4 & 5: Embed and index
         embeddings = embedder.embed_chunks(chunks)
+
         rag.index_video(
             video_id=video_id,
             chunks=chunks,
@@ -222,6 +238,10 @@ async def process_video(request: ProcessVideoRequest):
                 "num_chunks": len(chunks)
             }
         )
+        
+        # Release temporary embedding memory
+        del embeddings
+        gc.collect()
         
         logger.info(f"Video {video_id} fully processed and indexed")
         
