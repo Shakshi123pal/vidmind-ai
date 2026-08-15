@@ -82,16 +82,11 @@ class VideoTranscriber:
             "--socket-timeout", "30",
             "--retries", "2",
             "--fragment-retries", "2",
-        
-            "--js-runtimes", "deno",
-            "--remote-components", "ejs:github",
-        
             "--extract-audio",
             "--audio-format", "mp3",
             "--audio-quality", "5",
             "--output", output_template,
         ]
-
         commands = []
 
         def build_cmd(*extra_args: str):
