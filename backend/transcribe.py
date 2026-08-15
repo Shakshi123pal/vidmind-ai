@@ -119,11 +119,15 @@ class VideoTranscriber:
         for cmd in commands:
             try:
                 result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    timeout=600  # 10 min timeout
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=120
                 )
+            
+                logger.info(f"yt-dlp return code: {result.returncode}")
+                logger.info(f"yt-dlp stdout: {result.stdout[-2000:]}")
+                logger.info(f"yt-dlp stderr: {result.stderr[-4000:]}")
                 if result.returncode == 0:
                     break
 
