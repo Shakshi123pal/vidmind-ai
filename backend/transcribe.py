@@ -81,6 +81,9 @@ class VideoTranscriber:
             "--no-playlist",
             "--no-warnings",
             "--quiet",
+            "--socket-timeout", "30",
+            "--retries", "2",
+            "--fragment-retries", "2",
             "--extract-audio",
             "--audio-format", "mp3",
             "--audio-quality", "5",
@@ -138,7 +141,9 @@ class VideoTranscriber:
                     continue
                 break
             except subprocess.TimeoutExpired:
-                raise RuntimeError("Audio download timed out (>10 minutes)")
+                last_error = "yt-dlp command timed out after 120 seconds"
+                logger.warning("yt-dlp command timed out; trying the next download method.")
+                continue
 
         if result is None or result.returncode != 0:
             if last_error and any(msg in last_error for msg in retry_messages):
