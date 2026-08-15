@@ -63,20 +63,14 @@ COPY static/ static/
 
 # ─── Environment Variables ───────────────────────────────────────────────────
 ENV HOST=0.0.0.0
-ENV PORT=7860
 ENV WORKERS=1
 
 # ─── Expose Port ─────────────────────────────────────────────────────────────
-EXPOSE 7860
+EXPOSE 10000
 
 # ─── Health Check ────────────────────────────────────────────────────────────
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD curl -f http://localhost:7860/health || exit 1
+    CMD curl -f http://localhost:10000/health || exit 1
 
 # ─── Startup Command ─────────────────────────────────────────────────────────
-CMD ["uvicorn", "main:app", \
-     "--host", "0.0.0.0", \
-     "--port", "7860", \
-     "--workers", "1", \
-     "--timeout-keep-alive", "75", \
-     "--log-level", "info"]
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-10000} --workers 1 --timeout-keep-alive 75 --log-level info"]
