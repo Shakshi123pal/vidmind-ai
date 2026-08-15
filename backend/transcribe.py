@@ -79,9 +79,9 @@ class VideoTranscriber:
 
         common_args = [
             "--no-playlist",
-            "--socket-timeout", "30",
-            "--retries", "2",
-            "--fragment-retries", "2",
+            "--socket-timeout", "15",
+            "--retries", "1",
+            "--fragment-retries", "1",
             "--extract-audio",
             "--audio-format", "mp3",
             "--audio-quality", "5",
@@ -93,9 +93,14 @@ class VideoTranscriber:
             cmd = ["yt-dlp"] + common_args
             if cookies_path is not None:
                 cmd.extend(["--cookies", str(cookies_path)])
-            cmd.extend(extra_args)
-            cmd.append(url)
-            return cmd
+            cmd.extend([
+                "--extractor-args",
+                "youtube:player_client=android,web"
+            ])
+
+    cmd.extend(extra_args)
+    cmd.append(url)
+    return cmd
 
         # Try a standard cookie-authenticated audio extraction first.
         commands.append(build_cmd())
@@ -122,7 +127,7 @@ class VideoTranscriber:
                 cmd,
                 capture_output=True,
                 text=True,
-                timeout=300
+                timeout=90
                 )
             
                 logger.info(f"yt-dlp return code: {result.returncode}")
@@ -138,7 +143,7 @@ class VideoTranscriber:
                     continue
                 break
             except subprocess.TimeoutExpired:
-                last_error = "yt-dlp command timed out after 300 seconds"
+                last_error = "yt-dlp command timed out after 90 seconds"
                 logger.warning("yt-dlp command timed out; trying the next download method.")
                 continue
 
