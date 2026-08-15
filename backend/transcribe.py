@@ -79,8 +79,6 @@ class VideoTranscriber:
 
         common_args = [
             "--no-playlist",
-            "--no-warnings",
-            "--quiet",
             "--socket-timeout", "30",
             "--retries", "2",
             "--fragment-retries", "2",
