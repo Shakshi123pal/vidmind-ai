@@ -141,7 +141,7 @@ class VideoTranscriber:
                     continue
                 break
             except subprocess.TimeoutExpired:
-                last_error = "yt-dlp command timed out after 120 seconds"
+                last_error = "yt-dlp command timed out after 300 seconds"
                 logger.warning("yt-dlp command timed out; trying the next download method.")
                 continue
 
