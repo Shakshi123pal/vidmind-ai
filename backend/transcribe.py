@@ -85,10 +85,6 @@ class VideoTranscriber:
             "--retries", "1",
             "--fragment-retries", "1",
             "--force-ipv4",
-
-            "--js-runtimes", "deno",
-            "--remote-components", "ejs:github",
-        
             # Audio
             "--extract-audio",
             "--audio-format", "mp3",
@@ -104,7 +100,7 @@ class VideoTranscriber:
                 cmd.extend(["--cookies", str(cookies_path)])
             cmd.extend([
                 "--extractor-args",
-                "youtube:player_client=default,web_embedded"
+                "youtube:player_client=default"
             ])
 
             cmd.extend(extra_args)
