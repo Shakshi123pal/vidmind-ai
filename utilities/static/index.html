@@ -1122,8 +1122,20 @@ async function processVideo() {
     clearInterval(stepInterval);
 
     if (!r.ok) {
-      const err = await r.json();
-      throw new Error(err.detail || `HTTP ${r.status}`);
+        const text = await r.text();
+    
+        let message = `HTTP ${r.status}`;
+    
+        try {
+            const err = JSON.parse(text);
+            message = err.detail || err.message || message;
+        } catch (parseError) {
+            if (text) {
+                message = text;
+            }
+        }
+    
+        throw new Error(message);
     }
 
     const data = await r.json();
@@ -1201,8 +1213,20 @@ async function askQuestion() {
     clearInterval(stepInt);
 
     if (!r.ok) {
-      const err = await r.json();
-      throw new Error(err.detail || `HTTP ${r.status}`);
+        const text = await r.text();
+    
+        let message = `HTTP ${r.status}`;
+    
+        try {
+            const err = JSON.parse(text);
+            message = err.detail || err.message || message;
+        } catch (parseError) {
+            if (text) {
+                message = text;
+            }
+        }
+    
+        throw new Error(message);
     }
 
     const data = await r.json();
