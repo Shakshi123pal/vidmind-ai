@@ -98,9 +98,9 @@ class VideoTranscriber:
                 "youtube:player_client=android,web"
             ])
 
-    cmd.extend(extra_args)
-    cmd.append(url)
-    return cmd
+            cmd.extend(extra_args)
+            cmd.append(url)
+            return cmd
 
         # Try a standard cookie-authenticated audio extraction first.
         commands.append(build_cmd())
