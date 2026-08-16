@@ -86,10 +86,6 @@ class VideoTranscriber:
             "--fragment-retries", "1",
             "--force-ipv4",
         
-            # YouTube JS challenge support
-            "--js-runtimes", "deno",
-            "--remote-components", "ejs:github",
-        
             # Audio
             "--extract-audio",
             "--audio-format", "mp3",
