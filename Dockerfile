@@ -42,6 +42,10 @@ COPY backend/requirements.txt ./backend/requirements.txt
 COPY utilities/ ./utilities/
 COPY backend/ ./backend/
 
+RUN yt-dlp --version && \
+    python -c "import yt_dlp_ejs; print('yt-dlp-ejs:', yt_dlp_ejs.__version__)" && \
+    deno --version
+
 RUN pip install --no-cache-dir -r ./backend/requirements.txt \
     --extra-index-url https://download.pytorch.org/whl/cpu
 
