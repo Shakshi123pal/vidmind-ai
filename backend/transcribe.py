@@ -79,12 +79,22 @@ class VideoTranscriber:
 
         common_args = [
             "--no-playlist",
-            "--socket-timeout", "15",
+        
+            # Network stability
+            "--socket-timeout", "20",
             "--retries", "1",
             "--fragment-retries", "1",
+            "--force-ipv4",
+        
+            # YouTube JS challenge support
+            "--js-runtimes", "deno",
+            "--remote-components", "ejs:github",
+        
+            # Audio
             "--extract-audio",
             "--audio-format", "mp3",
             "--audio-quality", "5",
+        
             "--output", output_template,
         ]
         commands = []
