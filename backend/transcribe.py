@@ -10,7 +10,7 @@ import subprocess
 import hashlib 
 from pathlib import Path
 from typing import Optional, Tuple
-
+   
 logger = logging.getLogger("videorag.transcribe")
 
 
@@ -104,7 +104,7 @@ class VideoTranscriber:
                 cmd.extend(["--cookies", str(cookies_path)])
             cmd.extend([
                 "--extractor-args",
-                "youtube:player_client=web_embedded,default"
+                "youtube:player_client=default,web_embedded"
             ])
 
             cmd.extend(extra_args)
@@ -146,10 +146,19 @@ class VideoTranscriber:
                     logger.warning("YouTube extraction path failed; retrying with alternate yt-dlp settings.")
                     continue
                 break
-            except subprocess.TimeoutExpired:
-                last_error = "yt-dlp command timed out after 90 seconds"
-                logger.warning("yt-dlp command timed out; trying the next download method.")
-                continue
+            except subprocess.TimeoutExpired as e:
+                stdout = e.stdout or ""
+                stderr = e.stderr or ""
+            
+                last_error = (
+                    f"yt-dlp command timed out after 90 seconds\n"
+                    f"stdout: {stdout[-2000:]}\n"
+                    f"stderr: {stderr[-4000:]}"
+                )
+            
+                logger.error(last_error)
+                logger.warning("yt-dlp timed out; stopping this attempt.")
+                break
 
         if result is None or result.returncode != 0:
             if last_error and any(msg in last_error for msg in retry_messages):
