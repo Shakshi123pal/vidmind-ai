@@ -95,21 +95,16 @@ class VideoTranscriber:
                 cmd.extend(["--cookies", str(cookies_path)])
             cmd.extend([
                 "--extractor-args",
-                "youtube:player_client=android,web"
+                "youtube:player_client=web_embedded,default"
             ])
 
             cmd.extend(extra_args)
             cmd.append(url)
             return cmd
 
-        # Try a standard cookie-authenticated audio extraction first.
-        commands.append(build_cmd())
-
-        # Retry with a direct best-audio selector if the default path is unavailable.
-        commands.append(build_cmd("-f", "bestaudio/best"))
-
-        # Final fallback uses the same simple cookie-based path.
-        commands.append(build_cmd("-f", "bestaudio[ext=m4a]/bestaudio[ext=mp4]/bestaudio[ext=webm]/bestaudio/best"))
+        commands.append(
+            build_cmd("-f", "bestaudio/best")
+        )
 
         result = None
         last_error = None
