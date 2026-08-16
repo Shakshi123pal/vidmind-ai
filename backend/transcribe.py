@@ -85,6 +85,9 @@ class VideoTranscriber:
             "--retries", "1",
             "--fragment-retries", "1",
             "--force-ipv4",
+
+            "--js-runtimes", "deno",
+            "--remote-components", "ejs:github",
         
             # Audio
             "--extract-audio",
